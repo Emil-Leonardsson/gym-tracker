@@ -20,6 +20,7 @@
     --accent-soft: #f2d9cb;
     --done: #2f6e63;
     --done-soft: #d9e8e3;
+    --gold: #b8860b;
     --shadow: rgba(33, 25, 18, 0.08);
   }
   @media (prefers-color-scheme: dark) {
@@ -35,6 +36,7 @@
       --accent-soft: #4a2c1c;
       --done: #4fa98d;
       --done-soft: #203a33;
+      --gold: #f0c65a;
       --shadow: rgba(0, 0, 0, 0.35);
     }
   }
@@ -50,6 +52,7 @@
     --accent-soft: #4a2c1c;
     --done: #4fa98d;
     --done-soft: #203a33;
+    --gold: #f0c65a;
     --shadow: rgba(0, 0, 0, 0.35);
   }
 
@@ -177,6 +180,36 @@
   button.primary:disabled { opacity: 0.6; cursor: default; }
   button.primary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
+  .undo-toast {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 14px;
+    position: relative;
+    z-index: 6;
+  }
+  .undo-toast[hidden] { display: none; }
+  .undo-toast button {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+  .undo-toast button:hover { text-decoration: underline; }
+  .undo-toast button:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+  .undo-toast button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .rotation {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -199,17 +232,23 @@
   .chip.last::after {
     content: "✓";
     position: absolute;
-    top: -7px;
-    right: -6px;
-    width: 18px;
-    height: 18px;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    background: var(--done);
-    color: #fff;
-    font-size: 11px;
+    background: var(--surface);
+    border: 2px solid var(--gold);
+    outline: 1px solid var(--gold);
+    outline-offset: -4px;
+    color: var(--gold);
+    font-size: 10px;
+    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
+    transform: rotate(-12deg);
+    box-shadow: 0 1px 4px var(--shadow);
   }
 
   section.stats { margin-top: 34px; }
@@ -274,7 +313,6 @@
   }
 
   .quest-stamp {
-    --gold: #d4af37;
     position: absolute;
     inset: 0;
     display: flex;
@@ -286,10 +324,6 @@
     z-index: 5;
     transition: opacity 0.5s ease;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .quest-stamp { --gold: #f0c65a; }
-  }
-  :root[data-theme="dark"] .quest-stamp { --gold: #f0c65a; }
   .quest-stamp.show { opacity: 1; transition: opacity 0.15s ease; }
 
   .quest-stamp .badge {
@@ -366,6 +400,11 @@
     <span class="variant-tag" id="hero-variant"></span>
     <ul class="exercise-list" id="hero-exercises"></ul>
     <button class="primary" id="complete-btn" disabled>Markera som genomfört</button>
+
+    <div class="undo-toast" id="undo-toast" hidden>
+      <span>Pass loggat.</span>
+      <button type="button" id="undo-btn">Ångra</button>
+    </div>
 
     <div class="quest-stamp" id="quest-stamp" aria-hidden="true">
       <div class="badge">
@@ -475,9 +514,45 @@
     history: document.getElementById("history"),
     statusLine: document.getElementById("status-line"),
     questStamp: document.getElementById("quest-stamp"),
+    undoToast: document.getElementById("undo-toast"),
+    undoBtn: document.getElementById("undo-btn"),
   };
 
   let stampTimer = null;
+  let undoTimer = null;
+  let lastSessionRef = null; // DocumentReference, when mode === "db"
+  let lastSessionLocal = null; // the entry object, when mode === "local"
+
+  function showUndoToast() {
+    el.undoToast.hidden = false;
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hideUndoToast, 8000);
+  }
+
+  function hideUndoToast() {
+    el.undoToast.hidden = true;
+    clearTimeout(undoTimer);
+    lastSessionRef = null;
+    lastSessionLocal = null;
+  }
+
+  async function undoLast() {
+    if (el.undoBtn.disabled) return;
+    el.undoBtn.disabled = true;
+    el.undoBtn.textContent = "Ångrar…";
+    try {
+      if (mode === "db" && lastSessionRef) {
+        await lastSessionRef.delete();
+      } else if (lastSessionLocal && sessions[0] === lastSessionLocal) {
+        sessions.shift();
+        saveLocal();
+        render();
+      }
+    } catch (e) {}
+    el.undoBtn.textContent = "Ångra";
+    el.undoBtn.disabled = false;
+    hideUndoToast();
+  }
 
   function playFanfare() {
     try {
@@ -692,14 +767,24 @@
 
     if (mode === "db" && dbCol) {
       try {
-        await dbCol.add({ templateId, completedAt });
+        lastSessionRef = await dbCol.add({ templateId, completedAt });
+        lastSessionLocal = null;
+        showUndoToast();
       } catch (e) {
-        sessions.unshift({ templateId, completedAt });
+        const entry = { templateId, completedAt };
+        sessions.unshift(entry);
+        lastSessionLocal = entry;
+        lastSessionRef = null;
+        showUndoToast();
         render();
       }
     } else {
-      sessions.unshift({ templateId, completedAt });
+      const entry = { templateId, completedAt };
+      sessions.unshift(entry);
+      lastSessionLocal = entry;
+      lastSessionRef = null;
       saveLocal();
+      showUndoToast();
       render();
     }
 
@@ -708,6 +793,7 @@
   }
 
   el.completeBtn.addEventListener("click", completeSession);
+  el.undoBtn.addEventListener("click", undoLast);
 
   async function init() {
     let db = null;

@@ -106,23 +106,56 @@
 
   .exercise-list { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
   .exercise-list li {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
     padding: 10px 14px;
     background: var(--surface-2);
     border-radius: 10px;
     font-size: 15px;
   }
+  .exercise-list .ex-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .exercise-list .ex-name { flex: 1; }
   .exercise-list .muscle {
     font-family: "IBM Plex Mono", monospace;
     font-size: 11px;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--muted);
-    align-self: center;
     white-space: nowrap;
   }
+  .info-btn {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .info-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .info-btn[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ex-desc {
+    margin: 10px 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .ex-desc[hidden] { display: none; }
 
   button.primary {
     width: 100%;
@@ -280,40 +313,64 @@
 
   const TEMPLATES = [
     { id: "br-a", group: "Ben & Rygg", variant: "A", exercises: [
-      { name: "Goblet squat", muscle: "Ben" },
-      { name: "Bulgarian split squat mot bänk", muscle: "Ben" },
-      { name: "Framåtlutad hantelrodd", muscle: "Rygg" },
-      { name: "Rumänsk marklyft med hantlar", muscle: "Rygg" },
+      { name: "Goblet squat", muscle: "Ben",
+        desc: "Håll en hantel lodrätt mot bröstet med båda händerna. Böj knäna och sänk höften rakt ner tills låren är parallella med golvet, håll ryggen rak. Pressa upp genom hälarna." },
+      { name: "Bulgarian split squat mot bänk", muscle: "Ben",
+        desc: "Stå med ena foten bakom dig uppe på bänken, andra foten ett kliv framför kroppen. Böj det främre knäet och sänk bakre knäet mot golvet, håll bålen upprätt." },
+      { name: "Framåtlutad hantelrodd", muscle: "Rygg",
+        desc: "Luta överkroppen framåt ca 45°, knäna lätt böjda, hantlar hängandes rakt ner. Dra hantlarna upp mot höften genom att klämma ihop skulderbladen." },
+      { name: "Rumänsk marklyft med hantlar", muscle: "Rygg",
+        desc: "Håll hantlarna framför låren, höft bakåt med nästan raka ben. Sänk hantlarna längs benen tills du känner stretch i baksida lår, res dig upp genom att skjuta höften framåt." },
     ]},
     { id: "ab-a", group: "Axel & Bröst", variant: "A", exercises: [
-      { name: "Hantelpress sittande", muscle: "Axel" },
-      { name: "Sidolyft", muscle: "Axel" },
-      { name: "Bänkpress med hantlar, platt bänk", muscle: "Bröst" },
-      { name: "Flyes, platt bänk", muscle: "Bröst" },
+      { name: "Hantelpress sittande", muscle: "Axel",
+        desc: "Sitt med rak rygg, hantlar i axelhöjd med handflatorna framåt. Pressa hantlarna rakt upp tills armarna nästan är helt raka, sänk kontrollerat." },
+      { name: "Sidolyft", muscle: "Axel",
+        desc: "Stå med hantlar längs sidorna. Lyft armarna rakt ut åt sidorna till axelhöjd med en lätt böjning i armbågen, sänk kontrollerat." },
+      { name: "Bänkpress med hantlar, platt bänk", muscle: "Bröst",
+        desc: "Ligg på rygg på bänken, hantlar i brösthöjd med armbågarna böjda. Pressa hantlarna rakt upp över bröstet, sänk kontrollerat tillbaka." },
+      { name: "Flyes, platt bänk", muscle: "Bröst",
+        desc: "Ligg på rygg, hantlar rakt upp över bröstet med lätt böjda armbågar. Sänk armarna åt sidorna i en bågrörelse tills du känner stretch i bröstet, för tillbaka." },
     ]},
     { id: "bt-a", group: "Biceps & Triceps", variant: "A", exercises: [
-      { name: "Stående hantelcurl", muscle: "Biceps" },
-      { name: "Hammercurl", muscle: "Biceps" },
-      { name: "Triceps extension över huvudet", muscle: "Triceps" },
-      { name: "Triceps kickback", muscle: "Triceps" },
+      { name: "Stående hantelcurl", muscle: "Biceps",
+        desc: "Stå med hantlar längs sidorna, handflator framåt. Böj armbågarna och curla hantlarna upp mot axlarna utan att svinga med kroppen." },
+      { name: "Hammercurl", muscle: "Biceps",
+        desc: "Som hantelcurl men med handflatorna vända mot varandra genom hela rörelsen." },
+      { name: "Triceps extension över huvudet", muscle: "Triceps",
+        desc: "Håll en hantel med båda händerna rakt upp över huvudet. Sänk hanteln bakom huvudet genom att böja armbågarna, pressa tillbaka upp." },
+      { name: "Triceps kickback", muscle: "Triceps",
+        desc: "Luta överkroppen framåt, överarmen intill sidan och parallell med golvet. Sträck ut underarmen bakåt tills armen är helt rak, för tillbaka kontrollerat." },
     ]},
     { id: "br-b", group: "Ben & Rygg", variant: "B", exercises: [
-      { name: "Step-up på bänk", muscle: "Ben" },
-      { name: "Hantellunges", muscle: "Ben" },
-      { name: "Enarmsrodd mot bänk", muscle: "Rygg" },
-      { name: "Hantelpullover på bänk", muscle: "Rygg" },
+      { name: "Step-up på bänk", muscle: "Ben",
+        desc: "Stå framför bänken, kliv upp med ena foten och pressa dig upp tills du står helt uppe på bänken. Stig ner kontrollerat och byt sida." },
+      { name: "Hantellunges", muscle: "Ben",
+        desc: "Håll hantlar längs sidorna, ta ett långt kliv framåt och sänk tills bakre knäet nästan nuddar golvet. Pressa tillbaka till startläget." },
+      { name: "Enarmsrodd mot bänk", muscle: "Rygg",
+        desc: "Stöd ena handen och samma sidas knä mot bänken, ryggen parallell med golvet. Dra hanteln upp mot höften med andra armen, sänk kontrollerat." },
+      { name: "Hantelpullover på bänk", muscle: "Rygg",
+        desc: "Ligg på rygg på bänken med en hantel hållen med båda händerna rakt ovanför bröstet. Sänk hanteln bakåt över huvudet i en bågrörelse, för tillbaka." },
     ]},
     { id: "ab-b", group: "Axel & Bröst", variant: "B", exercises: [
-      { name: "Arnold press", muscle: "Axel" },
-      { name: "Framåtlyft", muscle: "Axel" },
-      { name: "Bänkpress, lutande bänk", muscle: "Bröst" },
-      { name: "Flyes, lutande bänk", muscle: "Bröst" },
+      { name: "Arnold press", muscle: "Axel",
+        desc: "Börja med hantlarna framför axlarna, handflator mot dig. Pressa upp samtidigt som du roterar handlederna så handflatorna pekar framåt vid toppen." },
+      { name: "Framåtlyft", muscle: "Axel",
+        desc: "Stå med hantlar framför låren. Lyft en eller båda armarna rakt fram till axelhöjd, sänk kontrollerat." },
+      { name: "Bänkpress, lutande bänk", muscle: "Bröst",
+        desc: "Som bänkpress men på en bänk lutad ca 30–45°, vilket riktar mer belastning mot övre bröstet." },
+      { name: "Flyes, lutande bänk", muscle: "Bröst",
+        desc: "Som flyes men på lutande bänk, för övre bröstet." },
     ]},
     { id: "bt-b", group: "Biceps & Triceps", variant: "B", exercises: [
-      { name: "Sittande hantelcurl på bänk", muscle: "Biceps" },
-      { name: "Koncentrationscurl", muscle: "Biceps" },
-      { name: "Dips mot bänk", muscle: "Triceps" },
-      { name: "Nedliggande triceps-press på bänk", muscle: "Triceps" },
+      { name: "Sittande hantelcurl på bänk", muscle: "Biceps",
+        desc: "Sitt på bänken med rak rygg, curla hantlarna upp mot axlarna en arm i taget eller samtidigt." },
+      { name: "Koncentrationscurl", muscle: "Biceps",
+        desc: "Sitt på bänken, stöd armbågen mot insidan av låret. Curla hanteln upp mot axeln med fokus på biceps, sänk långsamt." },
+      { name: "Dips mot bänk", muscle: "Triceps",
+        desc: "Sitt på kanten av bänken med händerna bredvid höfterna, fötterna framför dig. Sänk kroppen genom att böja armbågarna, pressa upp igen." },
+      { name: "Nedliggande triceps-press på bänk", muscle: "Triceps",
+        desc: "Ligg på rygg med hantlar rakt upp över axlarna. Böj enbart armbågarna och sänk hantlarna mot huvudet, pressa upp igen." },
     ]},
   ];
   const ROTATION_ORDER = ["br-a", "ab-a", "bt-a", "br-b", "ab-b", "bt-b"];
@@ -358,14 +415,43 @@
     el.heroTitle.textContent = next.group;
     el.heroVariant.textContent = "Variant " + next.variant;
     el.heroExercises.innerHTML = "";
-    next.exercises.forEach((ex) => {
+    next.exercises.forEach((ex, i) => {
       const li = document.createElement("li");
+
+      const row = document.createElement("div");
+      row.className = "ex-row";
+
       const name = document.createElement("span");
+      name.className = "ex-name";
       name.textContent = ex.name;
+
+      const infoBtn = document.createElement("button");
+      infoBtn.type = "button";
+      infoBtn.className = "info-btn";
+      infoBtn.textContent = "?";
+      infoBtn.setAttribute("aria-expanded", "false");
+      infoBtn.setAttribute("aria-label", "Beskrivning: " + ex.name);
+
       const muscle = document.createElement("span");
       muscle.className = "muscle";
       muscle.textContent = ex.muscle;
-      li.append(name, muscle);
+
+      row.append(name, infoBtn, muscle);
+
+      const desc = document.createElement("p");
+      desc.className = "ex-desc";
+      desc.id = "ex-desc-" + i;
+      desc.textContent = ex.desc;
+      desc.hidden = true;
+      infoBtn.setAttribute("aria-controls", desc.id);
+
+      infoBtn.addEventListener("click", () => {
+        const isOpen = !desc.hidden;
+        desc.hidden = isOpen;
+        infoBtn.setAttribute("aria-expanded", String(!isOpen));
+      });
+
+      li.append(row, desc);
       el.heroExercises.appendChild(li);
     });
     el.completeBtn.disabled = mode === "loading";

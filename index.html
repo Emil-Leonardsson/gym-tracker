@@ -89,6 +89,8 @@
   .hero {
     box-shadow: 0 10px 30px var(--shadow);
     margin-bottom: 22px;
+    position: relative;
+    overflow: hidden;
   }
   .hero .eyebrow { color: var(--accent); }
   .hero h2 {
@@ -271,10 +273,81 @@
     margin-top: 30px;
   }
 
+  .quest-stamp {
+    --gold: #d4af37;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.16), transparent 65%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+    transition: opacity 0.5s ease;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .quest-stamp { --gold: #f0c65a; }
+  }
+  :root[data-theme="dark"] .quest-stamp { --gold: #f0c65a; }
+  .quest-stamp.show { opacity: 1; transition: opacity 0.15s ease; }
+
+  .quest-stamp .badge {
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    border: 3px solid var(--gold);
+    outline: 1.5px solid var(--gold);
+    outline-offset: -12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 10%, transparent);
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+    transform: scale(2.6) rotate(-14deg);
+    opacity: 0;
+    transition: transform 0.5s cubic-bezier(0.2, 1.6, 0.4, 1), opacity 0.2s ease, box-shadow 0.5s ease 0.15s;
+  }
+  .quest-stamp.show .badge {
+    transform: scale(1) rotate(-8deg);
+    opacity: 1;
+    box-shadow: 0 0 34px 6px rgba(212, 175, 55, 0.45);
+  }
+  .quest-stamp .badge .rule {
+    width: 56%;
+    height: 2px;
+    background: var(--gold);
+    opacity: 0.7;
+    margin: 5px 0;
+  }
+  .quest-stamp .badge .line1 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .quest-stamp .badge .line2 {
+    font-family: "Big Shoulders Display", sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1;
+    margin-top: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .quest-stamp, .quest-stamp .badge { transition: opacity 0.3s ease; transform: none !important; }
+  }
+
   @media (max-width: 480px) {
     .rotation { grid-template-columns: repeat(3, 1fr); }
     .stat-tiles { grid-template-columns: repeat(3, 1fr); }
     .bar-row { grid-template-columns: 90px 1fr 30px; }
+    .quest-stamp .badge { width: 160px; height: 160px; }
+    .quest-stamp .badge .line2 { font-size: 24px; }
   }
 </style>
 </head>
@@ -293,6 +366,15 @@
     <span class="variant-tag" id="hero-variant"></span>
     <ul class="exercise-list" id="hero-exercises"></ul>
     <button class="primary" id="complete-btn" disabled>Markera som genomfört</button>
+
+    <div class="quest-stamp" id="quest-stamp" aria-hidden="true">
+      <div class="badge">
+        <span class="rule"></span>
+        <span class="line1">Pass</span>
+        <span class="line2">Slutfört</span>
+        <span class="rule"></span>
+      </div>
+    </div>
   </div>
 
   <div class="rotation" id="rotation"></div>
@@ -392,7 +474,60 @@
     bars: document.getElementById("bars"),
     history: document.getElementById("history"),
     statusLine: document.getElementById("status-line"),
+    questStamp: document.getElementById("quest-stamp"),
   };
+
+  let stampTimer = null;
+
+  function playFanfare() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const now = ctx.currentTime;
+
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+      notes.forEach((freq, i) => {
+        const start = now + i * 0.09;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.3, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.55);
+      });
+
+      const chordStart = now + notes.length * 0.09 + 0.05;
+      [1046.5, 1318.51, 1568.0].forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, chordStart);
+        gain.gain.setValueAtTime(0, chordStart);
+        gain.gain.linearRampToValueAtTime(0.2, chordStart + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 1.1);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(chordStart);
+        osc.stop(chordStart + 1.2);
+      });
+
+      setTimeout(() => ctx.close(), 2200);
+    } catch (e) {}
+  }
+
+  function celebrate() {
+    playFanfare();
+    const stamp = el.questStamp;
+    stamp.classList.remove("show");
+    void stamp.offsetWidth; // restart animation on repeat clicks
+    stamp.classList.add("show");
+    clearTimeout(stampTimer);
+    stampTimer = setTimeout(() => stamp.classList.remove("show"), 1900);
+  }
 
   function nextTemplateId() {
     if (sessions.length === 0) return ROTATION_ORDER[0];
@@ -553,6 +688,7 @@
     const completedAt = new Date().toISOString();
     el.completeBtn.disabled = true;
     el.completeBtn.textContent = "Sparar…";
+    celebrate();
 
     if (mode === "db" && dbCol) {
       try {

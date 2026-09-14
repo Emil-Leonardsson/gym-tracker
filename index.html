@@ -208,6 +208,8 @@
   .chip.current { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
   .chip.last { border-color: var(--gold); }
   .chip.last.panel-open { box-shadow: 0 0 0 2px var(--gold); }
+  .chip.stamped { z-index: 1; }
+  .chip.stamped:hover, .chip.stamped:focus-within { z-index: 3; }
 
   .chip-stamp {
     position: absolute;
@@ -216,13 +218,14 @@
     align-items: center;
     justify-content: center;
     pointer-events: none;
+    z-index: 2;
   }
   .chip-stamp img {
-    width: 84%;
-    height: 84%;
+    width: 130%;
+    height: 130%;
     object-fit: contain;
     transform: rotate(-6deg);
-    filter: drop-shadow(0 2px 3px var(--shadow));
+    filter: drop-shadow(0 3px 5px var(--shadow));
   }
 
   .undo-panel {
@@ -704,6 +707,7 @@
       chip.innerHTML = '<span class="grp">' + t.variant + "</span>" +
         t.group.split(" & ").map((w) => w.slice(0, 4)).join("/");
       if (isCompleted) {
+        chip.classList.add("stamped");
         const stampWrap = document.createElement("span");
         stampWrap.className = "chip-stamp";
         const img = document.createElement("img");

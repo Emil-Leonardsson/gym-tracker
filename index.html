@@ -401,6 +401,30 @@
     .quest-stamp .badge .line2 { font-size: 32px; }
     .quest-stamp .badge .rule { margin: 5px 0; }
   }
+
+  .stamp-burst {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+    overflow: hidden;
+  }
+  .stamp-burst img {
+    position: absolute;
+    opacity: 0;
+    filter: drop-shadow(0 3px 6px var(--shadow));
+    animation: burst-pop 1.9s ease-out forwards;
+  }
+  @keyframes burst-pop {
+    0% { opacity: 0; transform: scale(0.2) rotate(var(--rot, -8deg)); }
+    18% { opacity: 1; transform: scale(1.15) rotate(var(--rot, -8deg)); }
+    28% { transform: scale(1) rotate(var(--rot, -8deg)); }
+    78% { opacity: 1; transform: scale(1) rotate(var(--rot, -8deg)); }
+    100% { opacity: 0; transform: scale(0.92) rotate(var(--rot, -8deg)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stamp-burst { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -451,6 +475,8 @@
 
   <p class="status-line" id="status-line"></p>
 </div>
+
+<div class="stamp-burst" id="stamp-burst" aria-hidden="true"></div>
 
 <script>
 (function () {
@@ -541,6 +567,7 @@
     history: document.getElementById("history"),
     statusLine: document.getElementById("status-line"),
     questStamp: document.getElementById("quest-stamp"),
+    stampBurst: document.getElementById("stamp-burst"),
     undoPanel: document.getElementById("undo-panel"),
     undoPanelTitle: document.getElementById("undo-panel-title"),
     undoPanelDate: document.getElementById("undo-panel-date"),
@@ -588,44 +615,54 @@
     render();
   }
 
-  function playFanfare() {
+  function scheduleFanfare(ctx, atOffset, gainScale) {
+    const now = ctx.currentTime + atOffset;
+    const scale = gainScale === undefined ? 1 : gainScale;
+
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    notes.forEach((freq, i) => {
+      const start = now + i * 0.09;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.3 * scale, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.55);
+    });
+
+    const chordStart = now + notes.length * 0.09 + 0.05;
+    [1046.5, 1318.51, 1568.0].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, chordStart);
+      gain.gain.setValueAtTime(0, chordStart);
+      gain.gain.linearRampToValueAtTime(0.2 * scale, chordStart + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 1.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(chordStart);
+      osc.stop(chordStart + 1.2);
+    });
+  }
+
+  function openAudioContext() {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const now = ctx.currentTime;
+      return Ctx ? new Ctx() : null;
+    } catch (e) {
+      return null;
+    }
+  }
 
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
-      notes.forEach((freq, i) => {
-        const start = now + i * 0.09;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.3, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 0.55);
-      });
-
-      const chordStart = now + notes.length * 0.09 + 0.05;
-      [1046.5, 1318.51, 1568.0].forEach((freq) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, chordStart);
-        gain.gain.setValueAtTime(0, chordStart);
-        gain.gain.linearRampToValueAtTime(0.2, chordStart + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 1.1);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(chordStart);
-        osc.stop(chordStart + 1.2);
-      });
-
-      setTimeout(() => ctx.close(), 2200);
-    } catch (e) {}
+  function playFanfare() {
+    const ctx = openAudioContext();
+    if (!ctx) return;
+    scheduleFanfare(ctx, 0);
+    setTimeout(() => ctx.close(), 2200);
   }
 
   function celebrate() {
@@ -639,11 +676,39 @@
   }
 
   const SUPER_STAMP_HOLD_MS = 2800;
+  let burstTimer = null;
+
+  function spawnStampBurst(count) {
+    const container = el.stampBurst;
+    if (!container) return;
+    container.innerHTML = "";
+    const n = count || 12;
+    for (let i = 0; i < n; i++) {
+      const img = document.createElement("img");
+      img.src = STAMP_ICON_SRC;
+      img.alt = "";
+      const size = 50 + Math.random() * 70;
+      img.style.width = size + "px";
+      img.style.height = size + "px";
+      img.style.left = Math.random() * 92 + "%";
+      img.style.top = Math.random() * 88 + "%";
+      img.style.setProperty("--rot", (Math.random() * 64 - 32).toFixed(1) + "deg");
+      img.style.animationDelay = (Math.random() * 0.35).toFixed(2) + "s";
+      container.appendChild(img);
+    }
+    clearTimeout(burstTimer);
+    burstTimer = setTimeout(() => { container.innerHTML = ""; }, 2500);
+  }
 
   function superCelebrate() {
-    playFanfare();
-    setTimeout(playFanfare, 10);
-    setTimeout(playFanfare, 20);
+    const ctx = openAudioContext();
+    if (ctx) {
+      scheduleFanfare(ctx, 0, 1);
+      scheduleFanfare(ctx, 0.01, 0.85);
+      scheduleFanfare(ctx, 0.02, 0.7);
+      setTimeout(() => ctx.close(), 2500);
+    }
+    spawnStampBurst();
     const stamp = el.questStamp;
     stamp.classList.remove("show", "super");
     void stamp.offsetWidth;

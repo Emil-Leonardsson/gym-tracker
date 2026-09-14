@@ -357,6 +357,14 @@
     opacity: 1;
     box-shadow: 0 0 34px 6px rgba(212, 175, 55, 0.45);
   }
+  .quest-stamp.show.super .badge {
+    transform: scale(1.1) rotate(-8deg);
+    animation: super-pulse 0.55s ease-in-out 3;
+  }
+  @keyframes super-pulse {
+    0%, 100% { box-shadow: 0 0 34px 6px rgba(212, 175, 55, 0.45); }
+    50% { box-shadow: 0 0 60px 16px rgba(212, 175, 55, 0.8); }
+  }
   .quest-stamp .badge .rule {
     width: 68%;
     height: 2.5px;
@@ -381,7 +389,7 @@
     margin-top: 3px;
   }
   @media (prefers-reduced-motion: reduce) {
-    .quest-stamp, .quest-stamp .badge { transition: opacity 0.3s ease; transform: none !important; }
+    .quest-stamp, .quest-stamp .badge { transition: opacity 0.3s ease; transform: none !important; animation: none !important; }
   }
 
   @media (max-width: 480px) {
@@ -561,6 +569,7 @@
   async function confirmUndo() {
     if (undoBusy || sessions.length === 0) return;
     const target = sessions[0];
+    forcedLapStart = null;
     undoBusy = true;
     el.undoConfirmBtn.disabled = true;
     el.undoConfirmBtn.textContent = "Ångrar…";
@@ -622,11 +631,25 @@
   function celebrate() {
     playFanfare();
     const stamp = el.questStamp;
-    stamp.classList.remove("show");
+    stamp.classList.remove("show", "super");
     void stamp.offsetWidth; // restart animation on repeat clicks
     stamp.classList.add("show");
     clearTimeout(stampTimer);
     stampTimer = setTimeout(() => stamp.classList.remove("show"), 1900);
+  }
+
+  const SUPER_STAMP_HOLD_MS = 2800;
+
+  function superCelebrate() {
+    playFanfare();
+    setTimeout(playFanfare, 10);
+    setTimeout(playFanfare, 20);
+    const stamp = el.questStamp;
+    stamp.classList.remove("show", "super");
+    void stamp.offsetWidth;
+    stamp.classList.add("show", "super");
+    clearTimeout(stampTimer);
+    stampTimer = setTimeout(() => stamp.classList.remove("show", "super"), SUPER_STAMP_HOLD_MS);
   }
 
   const ROTATION_LENGTH = ROTATION_ORDER.length;
@@ -638,6 +661,13 @@
   function nextTemplateId() {
     return templateAtIndex(sessions.length);
   }
+
+  function naturalLapStart(totalDone) {
+    if (totalDone === 0) return 0;
+    return Math.floor((totalDone - 1) / ROTATION_WINDOW_SIZE) * ROTATION_WINDOW_SIZE;
+  }
+
+  let forcedLapStart = null;
 
   function fmtDate(iso) {
     const d = new Date(iso);
@@ -696,9 +726,9 @@
     el.rotation.innerHTML = "";
     const totalDone = sessions.length;
     const lastSession = totalDone ? sessions[0] : null;
-    const windowStart = Math.max(0, totalDone - 2);
+    const lapStart = forcedLapStart !== null ? forcedLapStart : naturalLapStart(totalDone);
     for (let i = 0; i < ROTATION_WINDOW_SIZE; i++) {
-      const absIndex = windowStart + i;
+      const absIndex = lapStart + i;
       const tid = templateAtIndex(absIndex);
       const t = byId[tid];
       const isDone = absIndex < totalDone;
@@ -825,7 +855,18 @@
     el.completeBtn.disabled = true;
     el.completeBtn.textContent = "Sparar…";
     showUndoPanel = false;
-    celebrate();
+    forcedLapStart = null;
+
+    const willCompleteLap = (sessions.length + 1) % ROTATION_WINDOW_SIZE === 0;
+    if (willCompleteLap) {
+      superCelebrate();
+      setTimeout(() => {
+        forcedLapStart = naturalLapStart(sessions.length) + ROTATION_WINDOW_SIZE;
+        render();
+      }, SUPER_STAMP_HOLD_MS + 150);
+    } else {
+      celebrate();
+    }
 
     if (mode === "db" && dbCol) {
       try {

@@ -367,27 +367,27 @@
     box-shadow: 0 0 34px 6px rgba(212, 175, 55, 0.45);
   }
   .quest-stamp .badge .rule {
-    width: 56%;
-    height: 2px;
+    width: 68%;
+    height: 2.5px;
     background: var(--gold);
     opacity: 0.7;
-    margin: 5px 0;
+    margin: 7px 0;
   }
   .quest-stamp .badge .line1 {
     font-family: "IBM Plex Mono", monospace;
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 600;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
   }
   .quest-stamp .badge .line2 {
     font-family: "Big Shoulders Display", sans-serif;
-    font-size: 30px;
+    font-size: 42px;
     font-weight: 800;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     line-height: 1;
-    margin-top: 2px;
+    margin-top: 3px;
   }
   @media (prefers-reduced-motion: reduce) {
     .quest-stamp, .quest-stamp .badge { transition: opacity 0.3s ease; transform: none !important; }
@@ -398,7 +398,9 @@
     .stat-tiles { grid-template-columns: repeat(3, 1fr); }
     .bar-row { grid-template-columns: 90px 1fr 30px; }
     .quest-stamp .badge { width: 160px; height: 160px; }
-    .quest-stamp .badge .line2 { font-size: 24px; }
+    .quest-stamp .badge .line1 { font-size: 12px; }
+    .quest-stamp .badge .line2 { font-size: 32px; }
+    .quest-stamp .badge .rule { margin: 5px 0; }
   }
 </style>
 </head>

@@ -180,41 +180,11 @@
   button.primary:disabled { opacity: 0.6; cursor: default; }
   button.primary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-  .undo-toast {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 12px;
-    padding: 10px 14px;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    font-size: 14px;
-    position: relative;
-    z-index: 6;
-  }
-  .undo-toast[hidden] { display: none; }
-  .undo-toast button {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    color: var(--accent);
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    padding: 4px 6px;
-  }
-  .undo-toast button:hover { text-decoration: underline; }
-  .undo-toast button:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
-  .undo-toast button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
   .rotation {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 8px;
-    margin-bottom: 26px;
+    margin-bottom: 12px;
   }
   .chip {
     border: 1px solid var(--line);
@@ -226,30 +196,77 @@
     color: var(--muted);
     background: var(--surface);
     position: relative;
+    margin: 0;
   }
+  button.chip {
+    width: 100%;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .chip .grp { display: block; font-size: 15px; margin-bottom: 2px; }
   .chip.current { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
-  .chip.last::after {
-    content: "✓";
+  .chip.last { border-color: var(--gold); }
+  .chip.last.panel-open { box-shadow: 0 0 0 2px var(--gold); }
+
+  .chip-stamp {
     position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--surface);
+    inset: -1px;
+    border-radius: 10px;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--gold) 16%, var(--surface));
     border: 2px solid var(--gold);
     outline: 1px solid var(--gold);
     outline-offset: -4px;
-    color: var(--gold);
-    font-size: 10px;
-    font-weight: 700;
+    transform: rotate(-4deg) scale(1.06);
+    box-shadow: 0 2px 6px var(--shadow);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    transform: rotate(-12deg);
-    box-shadow: 0 1px 4px var(--shadow);
+    gap: 1px;
   }
+  .chip-stamp .rule { width: 46%; height: 1.5px; background: var(--gold); opacity: 0.8; }
+  .chip-stamp .word {
+    font-family: "Big Shoulders Display", sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .undo-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 26px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    font-size: 14px;
+  }
+  .undo-panel[hidden] { display: none; }
+  .undo-panel .undo-info strong { display: block; font-size: 15px; }
+  .undo-panel .undo-info span { color: var(--muted); font-size: 12.5px; }
+  .undo-panel .undo-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .undo-panel button {
+    border-radius: 8px;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .undo-panel button.confirm { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .undo-panel button:disabled { opacity: 0.6; cursor: default; }
+  .undo-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   section.stats { margin-top: 34px; }
   section.stats h3 {
@@ -401,11 +418,6 @@
     <ul class="exercise-list" id="hero-exercises"></ul>
     <button class="primary" id="complete-btn" disabled>Markera som genomfört</button>
 
-    <div class="undo-toast" id="undo-toast" hidden>
-      <span>Pass loggat.</span>
-      <button type="button" id="undo-btn">Ångra</button>
-    </div>
-
     <div class="quest-stamp" id="quest-stamp" aria-hidden="true">
       <div class="badge">
         <span class="rule"></span>
@@ -417,6 +429,17 @@
   </div>
 
   <div class="rotation" id="rotation"></div>
+
+  <div class="undo-panel" id="undo-panel" hidden>
+    <div class="undo-info">
+      <strong id="undo-panel-title"></strong>
+      <span id="undo-panel-date"></span>
+    </div>
+    <div class="undo-actions">
+      <button type="button" id="undo-cancel-btn">Avbryt</button>
+      <button type="button" class="confirm" id="undo-confirm-btn">Ångra passet</button>
+    </div>
+  </div>
 
   <section class="stats">
     <h3>Statistik</h3>
@@ -514,44 +537,50 @@
     history: document.getElementById("history"),
     statusLine: document.getElementById("status-line"),
     questStamp: document.getElementById("quest-stamp"),
-    undoToast: document.getElementById("undo-toast"),
-    undoBtn: document.getElementById("undo-btn"),
+    undoPanel: document.getElementById("undo-panel"),
+    undoPanelTitle: document.getElementById("undo-panel-title"),
+    undoPanelDate: document.getElementById("undo-panel-date"),
+    undoCancelBtn: document.getElementById("undo-cancel-btn"),
+    undoConfirmBtn: document.getElementById("undo-confirm-btn"),
   };
 
   let stampTimer = null;
-  let undoTimer = null;
-  let lastSessionRef = null; // DocumentReference, when mode === "db"
-  let lastSessionLocal = null; // the entry object, when mode === "local"
+  let showUndoPanel = false;
+  let undoBusy = false;
 
-  function showUndoToast() {
-    el.undoToast.hidden = false;
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(hideUndoToast, 8000);
+  function genLocalId() {
+    return "local-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
   }
 
-  function hideUndoToast() {
-    el.undoToast.hidden = true;
-    clearTimeout(undoTimer);
-    lastSessionRef = null;
-    lastSessionLocal = null;
+  function toggleUndoPanel() {
+    showUndoPanel = !showUndoPanel;
+    render();
   }
 
-  async function undoLast() {
-    if (el.undoBtn.disabled) return;
-    el.undoBtn.disabled = true;
-    el.undoBtn.textContent = "Ångrar…";
+  function closeUndoPanel() {
+    showUndoPanel = false;
+    render();
+  }
+
+  async function confirmUndo() {
+    if (undoBusy || sessions.length === 0) return;
+    const target = sessions[0];
+    undoBusy = true;
+    el.undoConfirmBtn.disabled = true;
+    el.undoConfirmBtn.textContent = "Ångrar…";
     try {
-      if (mode === "db" && lastSessionRef) {
-        await lastSessionRef.delete();
-      } else if (lastSessionLocal && sessions[0] === lastSessionLocal) {
-        sessions.shift();
+      if (mode === "db" && dbCol && target.id) {
+        await dbCol.doc(target.id).delete();
+      } else {
+        sessions = sessions.filter((s) => s.id !== target.id);
         saveLocal();
-        render();
       }
     } catch (e) {}
-    el.undoBtn.textContent = "Ångra";
-    el.undoBtn.disabled = false;
-    hideUndoToast();
+    undoBusy = false;
+    showUndoPanel = false;
+    el.undoConfirmBtn.disabled = false;
+    el.undoConfirmBtn.textContent = "Ångra passet";
+    render();
   }
 
   function playFanfare() {
@@ -667,17 +696,39 @@
     el.completeBtn.disabled = mode === "loading";
 
     el.rotation.innerHTML = "";
-    const lastId = sessions.length ? sessions[0].templateId : null;
+    const lastSession = sessions.length ? sessions[0] : null;
+    const lastId = lastSession ? lastSession.templateId : null;
     ROTATION_ORDER.forEach((id) => {
       const t = byId[id];
-      const chip = document.createElement("div");
+      const isLast = id === lastId;
+      const chip = document.createElement(isLast ? "button" : "div");
+      if (isLast) chip.type = "button";
       chip.className = "chip";
       if (id === nextId) chip.classList.add("current");
-      if (id === lastId) chip.classList.add("last");
+      if (isLast) chip.classList.add("last");
+      if (isLast && showUndoPanel) chip.classList.add("panel-open");
       chip.innerHTML = '<span class="grp">' + t.variant + "</span>" +
         t.group.split(" & ").map((w) => w.slice(0, 4)).join("/");
+      if (isLast) {
+        chip.setAttribute("aria-expanded", String(showUndoPanel));
+        chip.setAttribute("aria-label", "Senast genomfört: " + t.group + " (" + t.variant + "). Klicka för att ångra.");
+        const stampWrap = document.createElement("span");
+        stampWrap.className = "chip-stamp";
+        stampWrap.innerHTML = '<span class="rule"></span><span class="word">Klart</span><span class="rule"></span>';
+        chip.appendChild(stampWrap);
+        chip.addEventListener("click", toggleUndoPanel);
+      }
       el.rotation.appendChild(chip);
     });
+
+    if (lastSession) {
+      const t = byId[lastSession.templateId];
+      el.undoPanelTitle.textContent = t ? t.group + " (" + t.variant + ")" : lastSession.templateId;
+      el.undoPanelDate.textContent = fmtDate(lastSession.completedAt);
+      el.undoPanel.hidden = !showUndoPanel;
+    } else {
+      el.undoPanel.hidden = true;
+    }
 
     const total = sessions.length;
     const now = Date.now();
@@ -749,6 +800,7 @@
     } catch (e) {
       sessions = [];
     }
+    sessions.forEach((s) => { if (!s.id) s.id = genLocalId(); });
     sessions.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
   }
 
@@ -763,28 +815,19 @@
     const completedAt = new Date().toISOString();
     el.completeBtn.disabled = true;
     el.completeBtn.textContent = "Sparar…";
+    showUndoPanel = false;
     celebrate();
 
     if (mode === "db" && dbCol) {
       try {
-        lastSessionRef = await dbCol.add({ templateId, completedAt });
-        lastSessionLocal = null;
-        showUndoToast();
+        await dbCol.add({ templateId, completedAt });
       } catch (e) {
-        const entry = { templateId, completedAt };
-        sessions.unshift(entry);
-        lastSessionLocal = entry;
-        lastSessionRef = null;
-        showUndoToast();
+        sessions.unshift({ id: genLocalId(), templateId, completedAt });
         render();
       }
     } else {
-      const entry = { templateId, completedAt };
-      sessions.unshift(entry);
-      lastSessionLocal = entry;
-      lastSessionRef = null;
+      sessions.unshift({ id: genLocalId(), templateId, completedAt });
       saveLocal();
-      showUndoToast();
       render();
     }
 
@@ -793,7 +836,8 @@
   }
 
   el.completeBtn.addEventListener("click", completeSession);
-  el.undoBtn.addEventListener("click", undoLast);
+  el.undoCancelBtn.addEventListener("click", closeUndoPanel);
+  el.undoConfirmBtn.addEventListener("click", confirmUndo);
 
   async function init() {
     let db = null;
@@ -810,7 +854,7 @@
       dbCol = db.collection("sessions");
       dbCol.orderBy("completedAt", "desc").limit(200).onSnapshot(
         (snap) => {
-          sessions = snap.docs.map((d) => d.data());
+          sessions = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
           render();
         },
         () => {

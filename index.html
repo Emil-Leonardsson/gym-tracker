@@ -682,16 +682,19 @@
     const container = el.stampBurst;
     if (!container) return;
     container.innerHTML = "";
+    const badgeEl = el.questStamp.querySelector(".badge");
+    const size = badgeEl ? badgeEl.getBoundingClientRect().width : 190;
     const n = count || 12;
     for (let i = 0; i < n; i++) {
       const img = document.createElement("img");
       img.src = STAMP_ICON_SRC;
       img.alt = "";
-      const size = 50 + Math.random() * 70;
       img.style.width = size + "px";
       img.style.height = size + "px";
-      img.style.left = Math.random() * 92 + "%";
-      img.style.top = Math.random() * 88 + "%";
+      img.style.marginLeft = -(size / 2) + "px";
+      img.style.marginTop = -(size / 2) + "px";
+      img.style.left = Math.random() * 100 + "%";
+      img.style.top = Math.random() * 100 + "%";
       img.style.setProperty("--rot", (Math.random() * 64 - 32).toFixed(1) + "deg");
       img.style.animationDelay = (Math.random() * 0.35).toFixed(2) + "s";
       container.appendChild(img);
@@ -704,9 +707,9 @@
     const ctx = openAudioContext();
     if (ctx) {
       scheduleFanfare(ctx, 0, 1);
-      scheduleFanfare(ctx, 0.01, 0.85);
-      scheduleFanfare(ctx, 0.02, 0.7);
-      setTimeout(() => ctx.close(), 2500);
+      scheduleFanfare(ctx, 0.15, 1);
+      scheduleFanfare(ctx, 0.3, 1);
+      setTimeout(() => ctx.close(), 2800);
     }
     spawnStampBurst();
     const stamp = el.questStamp;

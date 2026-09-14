@@ -678,7 +678,22 @@
   const SUPER_STAMP_HOLD_MS = 2800;
   let burstTimer = null;
 
-  function spawnStampBurst(count) {
+  function playStampThud(ctx, atOffset, pitch) {
+    const start = ctx.currentTime + atOffset;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(pitch, start);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 0.65, start + 0.1);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.22, start + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.25);
+  }
+
+  function spawnStampBurst(ctx, count) {
     const container = el.stampBurst;
     if (!container) return;
     container.innerHTML = "";
@@ -686,6 +701,7 @@
     const size = badgeEl ? badgeEl.getBoundingClientRect().width : 190;
     const n = count || 12;
     for (let i = 0; i < n; i++) {
+      const delay = Math.random() * 0.35;
       const img = document.createElement("img");
       img.src = STAMP_ICON_SRC;
       img.alt = "";
@@ -696,8 +712,9 @@
       img.style.left = Math.random() * 100 + "%";
       img.style.top = Math.random() * 100 + "%";
       img.style.setProperty("--rot", (Math.random() * 64 - 32).toFixed(1) + "deg");
-      img.style.animationDelay = (Math.random() * 0.35).toFixed(2) + "s";
+      img.style.animationDelay = delay.toFixed(2) + "s";
       container.appendChild(img);
+      if (ctx) playStampThud(ctx, delay + 0.05, 550 + Math.random() * 500);
     }
     clearTimeout(burstTimer);
     burstTimer = setTimeout(() => { container.innerHTML = ""; }, 2500);
@@ -707,11 +724,11 @@
     const ctx = openAudioContext();
     if (ctx) {
       scheduleFanfare(ctx, 0, 1);
-      scheduleFanfare(ctx, 0.15, 1);
-      scheduleFanfare(ctx, 0.3, 1);
+      spawnStampBurst(ctx);
       setTimeout(() => ctx.close(), 2800);
+    } else {
+      spawnStampBurst(null);
     }
-    spawnStampBurst();
     const stamp = el.questStamp;
     stamp.classList.remove("show", "super");
     void stamp.offsetWidth;

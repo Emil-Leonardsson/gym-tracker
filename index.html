@@ -182,7 +182,7 @@
 
   .rotation {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 8px;
     margin-bottom: 12px;
   }
@@ -385,7 +385,7 @@
   }
 
   @media (max-width: 480px) {
-    .rotation { grid-template-columns: repeat(3, 1fr); }
+    .rotation { grid-template-columns: repeat(4, 1fr); }
     .stat-tiles { grid-template-columns: repeat(3, 1fr); }
     .bar-row { grid-template-columns: 90px 1fr 30px; }
     .quest-stamp .badge { width: 160px; height: 160px; }
@@ -513,6 +513,7 @@
     ]},
   ];
   const ROTATION_ORDER = ["br-a", "ab-a", "bt-a", "br-b", "ab-b", "bt-b"];
+  const ROTATION_WINDOW_SIZE = 7;
   const byId = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
   const GROUP_BASE = ["Ben & Rygg", "Axel & Bröst", "Biceps & Triceps"];
 
@@ -628,12 +629,14 @@
     stampTimer = setTimeout(() => stamp.classList.remove("show"), 1900);
   }
 
+  const ROTATION_LENGTH = ROTATION_ORDER.length;
+
+  function templateAtIndex(absIndex) {
+    return ROTATION_ORDER[((absIndex % ROTATION_LENGTH) + ROTATION_LENGTH) % ROTATION_LENGTH];
+  }
+
   function nextTemplateId() {
-    if (sessions.length === 0) return ROTATION_ORDER[0];
-    const lastId = sessions[0].templateId;
-    const idx = ROTATION_ORDER.indexOf(lastId);
-    if (idx === -1) return ROTATION_ORDER[0];
-    return ROTATION_ORDER[(idx + 1) % ROTATION_ORDER.length];
+    return templateAtIndex(sessions.length);
   }
 
   function fmtDate(iso) {
@@ -691,22 +694,25 @@
     el.completeBtn.disabled = mode === "loading";
 
     el.rotation.innerHTML = "";
-    const lastSession = sessions.length ? sessions[0] : null;
-    const lastId = lastSession ? lastSession.templateId : null;
-    const completedIds = new Set(sessions.map((s) => s.templateId));
-    ROTATION_ORDER.forEach((id) => {
-      const t = byId[id];
-      const isLast = id === lastId;
-      const isCompleted = completedIds.has(id);
+    const totalDone = sessions.length;
+    const lastSession = totalDone ? sessions[0] : null;
+    const windowStart = Math.max(0, totalDone - 2);
+    for (let i = 0; i < ROTATION_WINDOW_SIZE; i++) {
+      const absIndex = windowStart + i;
+      const tid = templateAtIndex(absIndex);
+      const t = byId[tid];
+      const isDone = absIndex < totalDone;
+      const isNext = absIndex === totalDone;
+      const isLast = absIndex === totalDone - 1;
       const chip = document.createElement(isLast ? "button" : "div");
       if (isLast) chip.type = "button";
       chip.className = "chip";
-      if (id === nextId) chip.classList.add("current");
+      if (isNext) chip.classList.add("current");
       if (isLast) chip.classList.add("last");
       if (isLast && showUndoPanel) chip.classList.add("panel-open");
       chip.innerHTML = '<span class="grp">' + t.variant + "</span>" +
         t.group.split(" & ").map((w) => w.slice(0, 4)).join("/");
-      if (isCompleted) {
+      if (isDone) {
         chip.classList.add("stamped");
         const stampWrap = document.createElement("span");
         stampWrap.className = "chip-stamp";
@@ -722,7 +728,7 @@
         chip.addEventListener("click", toggleUndoPanel);
       }
       el.rotation.appendChild(chip);
-    });
+    }
 
     if (lastSession) {
       const t = byId[lastSession.templateId];

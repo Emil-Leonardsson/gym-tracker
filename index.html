@@ -1347,7 +1347,24 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   el.authForm.addEventListener("submit", handleAuthSubmit);
   el.loginToggleBtn.addEventListener("click", toggleLoginCard);
 
+  function showAuthErrorFromUrl() {
+    const hash = window.location.hash;
+    if (!hash || hash.indexOf("error=") === -1) return;
+    const params = new URLSearchParams(hash.slice(1));
+    if (!params.get("error")) return;
+    const errorCode = params.get("error_code");
+    const errorDescription = params.get("error_description");
+    el.authCard.hidden = false;
+    el.authStatus.hidden = false;
+    el.authStatus.classList.add("error");
+    el.authStatus.textContent = errorCode === "otp_expired"
+      ? "Länken har gått ut eller redan använts. Skicka en ny nedan."
+      : "Inloggningen misslyckades" + (errorDescription ? ": " + errorDescription.replace(/\+/g, " ") : ".") + " Skicka en ny länk nedan.";
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+
   function init() {
+    showAuthErrorFromUrl();
     loadAsGuest();
 
     let signedInLoaded = false;

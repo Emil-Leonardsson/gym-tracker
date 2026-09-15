@@ -82,6 +82,29 @@
   header.top h1 { font-size: 34px; font-weight: 800; line-height: 1.05; }
   header.top p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
 
+  .top-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .login-link {
+    flex-shrink: 0;
+    margin-top: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .login-link:hover { border-color: var(--accent); color: var(--accent); }
+  .login-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .login-link[hidden] { display: none; }
+
   .card {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -89,10 +112,8 @@
     padding: 22px;
   }
 
-  .auth-wrap { max-width: 420px; padding-block: 60px; }
-  .auth-card { box-shadow: 0 10px 30px var(--shadow); }
-  .auth-card h2 { font-size: 28px; font-weight: 800; margin: 2px 0 10px; }
-  .auth-copy { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 18px; }
+  .auth-card { margin-top: 16px; }
+  .auth-copy { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
   #auth-form { display: flex; flex-direction: column; gap: 10px; }
   .text-input {
     width: 100%;
@@ -502,25 +523,26 @@
 </head>
 <body>
 
-<div class="wrap auth-wrap" id="auth-gate" hidden>
-  <div class="card auth-card">
-    <p class="eyebrow">Passrotation</p>
-    <h2>Logga in</h2>
-    <p class="auth-copy">Ange din e-post så skickar vi en inloggningslänk. Ingen träningsdata visas förrän du är inloggad.</p>
-    <form id="auth-form">
-      <input type="email" id="auth-email" class="text-input" placeholder="din@epost.se" required autocomplete="email" inputmode="email" />
-      <button type="submit" class="primary" id="auth-submit-btn">Skicka länk</button>
-    </form>
-    <p class="auth-status" id="auth-status" hidden></p>
-  </div>
-</div>
-
-<div class="wrap" id="app" hidden>
+<div class="wrap" id="app">
 
   <header class="top">
-    <p class="eyebrow">Hantlar, bänk &amp; sittup-bänk</p>
-    <h1>Passrotation</h1>
+    <div class="top-row">
+      <div>
+        <p class="eyebrow">Hantlar, bänk &amp; sittup-bänk</p>
+        <h1>Passrotation</h1>
+      </div>
+      <button type="button" class="login-link" id="login-toggle-btn">Logga in</button>
+    </div>
     <p>Håll koll på vilket pass som är nästa, och se statistik över det du kört.</p>
+
+    <div class="card auth-card" id="auth-card" hidden>
+      <p class="auth-copy">Logga in med e-post för att synka passloggen i molnet mellan dina enheter. Utan inloggning sparas allt bara i den här webbläsaren.</p>
+      <form id="auth-form">
+        <input type="email" id="auth-email" class="text-input" placeholder="din@epost.se" required autocomplete="email" inputmode="email" />
+        <button type="submit" class="primary" id="auth-submit-btn">Skicka länk</button>
+      </form>
+      <p class="auth-status" id="auth-status" hidden></p>
+    </div>
   </header>
 
   <div class="card hero" id="hero">
@@ -684,8 +706,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   let authUser = null; // { id, email } once signed in
 
   const el = {
-    authGate: document.getElementById("auth-gate"),
-    app: document.getElementById("app"),
+    loginToggleBtn: document.getElementById("login-toggle-btn"),
+    authCard: document.getElementById("auth-card"),
     authForm: document.getElementById("auth-form"),
     authEmail: document.getElementById("auth-email"),
     authSubmitBtn: document.getElementById("auth-submit-btn"),
@@ -1222,7 +1244,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     el.statusLine.textContent = mode === "db"
       ? "Synkas i molnet — samma logg på alla dina enheter."
       : mode === "local"
-      ? "Sparas bara i den här webbläsaren (ingen molnsynk tillgänglig just nu)."
+      ? "Gästläge: sparas bara i den här webbläsaren. Logga in ovan för att synka i molnet."
       : "Laddar…";
   }
 
@@ -1266,14 +1288,16 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   el.undoCancelBtn.addEventListener("click", closeUndoPanel);
   el.undoConfirmBtn.addEventListener("click", confirmUndo);
 
-  function showAuthGate() {
-    el.authGate.hidden = false;
-    el.app.hidden = true;
+  function toggleLoginCard() {
+    el.authCard.hidden = !el.authCard.hidden;
   }
 
-  function showApp() {
-    el.authGate.hidden = true;
-    el.app.hidden = false;
+  function loadAsGuest() {
+    mode = "local";
+    loadLocal();
+    loadActiveLocal();
+    if (activeSession) startElapsedTimer();
+    render();
   }
 
   async function loadForUser() {
@@ -1319,22 +1343,25 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   }
 
   el.authForm.addEventListener("submit", handleAuthSubmit);
+  el.loginToggleBtn.addEventListener("click", toggleLoginCard);
 
   function init() {
-    let loaded = false;
+    loadAsGuest();
+
+    let signedInLoaded = false;
     supabase.auth.onAuthStateChange((event, session) => {
       if (session && session.user) {
         authUser = { id: session.user.id, email: session.user.email };
-        showApp();
-        if (!loaded) {
-          loaded = true;
+        el.loginToggleBtn.hidden = true;
+        el.authCard.hidden = true;
+        if (!signedInLoaded) {
+          signedInLoaded = true;
           loadForUser();
         }
       } else {
         authUser = null;
-        loaded = false;
-        stopElapsedTimer();
-        showAuthGate();
+        signedInLoaded = false;
+        el.loginToggleBtn.hidden = false;
       }
     });
   }

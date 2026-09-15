@@ -1026,7 +1026,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     const size = badgeEl ? badgeEl.getBoundingClientRect().width : 190;
     const n = count || 12;
     for (let i = 0; i < n; i++) {
-      const delay = Math.random() * 0.35;
+      const delay = i * 0.13 + Math.random() * 0.05;
       const img = document.createElement("img");
       img.src = STAMP_ICON_SRC;
       img.alt = "";
@@ -1045,7 +1045,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
       }
     }
     clearTimeout(burstTimer);
-    burstTimer = setTimeout(() => { container.innerHTML = ""; }, 2500);
+    burstTimer = setTimeout(() => { container.innerHTML = ""; }, 3500);
   }
 
   function superCelebrate() {
@@ -1053,7 +1053,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     if (ctx) {
       scheduleFanfare(ctx, 0, 1);
       spawnStampBurst(ctx);
-      setTimeout(() => ctx.close(), 2800);
+      setTimeout(() => ctx.close(), 3400);
     } else {
       spawnStampBurst(null);
     }

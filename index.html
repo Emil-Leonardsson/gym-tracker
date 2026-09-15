@@ -129,6 +129,7 @@
   .auth-status { font-size: 13px; margin: 14px 0 0; color: var(--muted); }
   .auth-status.error { color: var(--accent); }
   .auth-status[hidden] { display: none; }
+  .auth-note { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 14px 0 0; opacity: 0.85; }
 
   .hero {
     box-shadow: 0 10px 30px var(--shadow);
@@ -542,6 +543,7 @@
         <button type="submit" class="primary" id="auth-submit-btn">Skicka länk</button>
       </form>
       <p class="auth-status" id="auth-status" hidden></p>
+      <p class="auth-note">Det här är ett privat, personligt projekt — inte en publik tjänst. Din e-post används enbart för att skicka inloggningslänken (via Supabase) och sparas inte för något annat syfte.</p>
     </div>
   </header>
 

@@ -298,7 +298,7 @@
 
   .stat-tiles {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     margin-bottom: 20px;
   }
@@ -424,7 +424,6 @@
 
   @media (max-width: 480px) {
     .rotation { grid-template-columns: repeat(4, 1fr); }
-    .stat-tiles { grid-template-columns: repeat(3, 1fr); }
     .bar-row { grid-template-columns: 90px 1fr 30px; }
     .quest-stamp .badge { width: 160px; height: 160px; }
     .quest-stamp .badge .line1 { font-size: 12px; }
@@ -658,6 +657,13 @@
     const s = totalSec % 60;
     const pad = (n) => String(n).padStart(2, "0");
     return h > 0 ? pad(h) + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
+  }
+
+  function formatHoursMinutes(ms) {
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h === 0 ? m + " min" : h + "h " + m + "m";
   }
 
   function updateElapsedDisplay() {
@@ -1065,12 +1071,16 @@
     const now = Date.now();
     const last7d = sessions.filter((s) => now - new Date(s.completedAt).getTime() < 7 * 86400000).length;
     const lastDate = total ? fmtDate(sessions[0].completedAt) : "—";
+    const totalTrainedMs = sessions.reduce((sum, s) => {
+      return s.startedAt ? sum + (new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime()) : sum;
+    }, 0);
 
     el.statTiles.innerHTML = "";
     [
       { num: total, label: "Pass totalt" },
       { num: last7d, label: "Senaste 7 dagarna" },
       { num: lastDate, label: "Senast genomfört" },
+      { num: formatHoursMinutes(totalTrainedMs), label: "Total tränad tid" },
     ].forEach((s) => {
       const tile = document.createElement("div");
       tile.className = "tile";

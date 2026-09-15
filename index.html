@@ -228,6 +228,23 @@
     filter: drop-shadow(0 3px 5px var(--shadow));
   }
 
+  .undo-trigger {
+    display: block;
+    margin: 0 0 14px;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    cursor: pointer;
+  }
+  .undo-trigger[hidden] { display: none; }
+  .undo-trigger:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  .undo-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .undo-panel {
     display: flex;
     align-items: center;
@@ -455,6 +472,8 @@
 
   <div class="rotation" id="rotation"></div>
 
+  <button type="button" class="undo-trigger" id="undo-trigger" hidden>Ångra senaste passet</button>
+
   <div class="undo-panel" id="undo-panel" hidden>
     <div class="undo-info">
       <strong id="undo-panel-title"></strong>
@@ -568,6 +587,7 @@
     statusLine: document.getElementById("status-line"),
     questStamp: document.getElementById("quest-stamp"),
     stampBurst: document.getElementById("stamp-burst"),
+    undoTrigger: document.getElementById("undo-trigger"),
     undoPanel: document.getElementById("undo-panel"),
     undoPanelTitle: document.getElementById("undo-panel-title"),
     undoPanelDate: document.getElementById("undo-panel-date"),
@@ -847,11 +867,16 @@
 
     if (lastSession) {
       const t = byId[lastSession.templateId];
-      el.undoPanelTitle.textContent = t ? t.group + " (" + t.variant + ")" : lastSession.templateId;
+      const label = t ? t.group + " (" + t.variant + ")" : lastSession.templateId;
+      el.undoPanelTitle.textContent = label;
       el.undoPanelDate.textContent = fmtDate(lastSession.completedAt);
       el.undoPanel.hidden = !showUndoPanel;
+      el.undoTrigger.hidden = false;
+      el.undoTrigger.textContent = "Ångra senaste passet — " + label;
+      el.undoTrigger.setAttribute("aria-expanded", String(showUndoPanel));
     } else {
       el.undoPanel.hidden = true;
+      el.undoTrigger.hidden = true;
     }
 
     const total = sessions.length;
@@ -971,6 +996,7 @@
   }
 
   el.completeBtn.addEventListener("click", completeSession);
+  el.undoTrigger.addEventListener("click", toggleUndoPanel);
   el.undoCancelBtn.addEventListener("click", closeUndoPanel);
   el.undoConfirmBtn.addEventListener("click", confirmUndo);
 

@@ -1,4 +1,4 @@
-# Passrotation
+# TräningsKollen
 
 Enkel gymtracker: håller koll på vilket av sex pass som är nästa i rotationen
 (Ben, Rygg & Mage / Axel, Bröst & Mage / Biceps, Triceps & Mage – två

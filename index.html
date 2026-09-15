@@ -323,13 +323,6 @@
     margin-top: 2px;
   }
 
-  .bars { display: grid; gap: 10px; margin-bottom: 24px; }
-  .bar-row { display: grid; grid-template-columns: 110px 1fr 34px; align-items: center; gap: 10px; font-size: 13px; }
-  .bar-row .name { color: var(--muted); }
-  .bar-track { height: 10px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
-  .bar-fill { height: 100%; background: var(--done); border-radius: 6px; }
-  .bar-row .count { font-family: "IBM Plex Mono", monospace; text-align: right; font-variant-numeric: tabular-nums; }
-
   .history { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .history li {
     display: flex;
@@ -424,7 +417,6 @@
 
   @media (max-width: 480px) {
     .rotation { grid-template-columns: repeat(4, 1fr); }
-    .bar-row { grid-template-columns: 90px 1fr 30px; }
     .quest-stamp .badge { width: 160px; height: 160px; }
     .quest-stamp .badge .line1 { font-size: 12px; }
     .quest-stamp .badge .line2 { font-size: 32px; }
@@ -504,7 +496,6 @@
   <section class="stats">
     <h3>Statistik</h3>
     <div class="stat-tiles" id="stat-tiles"></div>
-    <div class="bars" id="bars"></div>
     <ul class="history" id="history"></ul>
   </section>
 
@@ -608,7 +599,6 @@
   const ROTATION_ORDER = ["br-a", "ab-a", "bt-a", "br-b", "ab-b", "bt-b"];
   const ROTATION_WINDOW_SIZE = 7;
   const byId = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
-  const GROUP_BASE = ["Ben, Rygg & Mage", "Axel, Bröst & Mage", "Biceps, Triceps & Mage"];
 
   const LOCAL_KEY = "gym-tracker-sessions-v1";
   let sessions = []; // {templateId, completedAt} newest first
@@ -626,7 +616,6 @@
     cancelBtn: document.getElementById("cancel-btn"),
     rotation: document.getElementById("rotation"),
     statTiles: document.getElementById("stat-tiles"),
-    bars: document.getElementById("bars"),
     history: document.getElementById("history"),
     statusLine: document.getElementById("status-line"),
     questStamp: document.getElementById("quest-stamp"),
@@ -1088,23 +1077,6 @@
       el.statTiles.appendChild(tile);
     });
 
-    const groupCounts = Object.fromEntries(GROUP_BASE.map((g) => [g, 0]));
-    sessions.forEach((s) => {
-      const t = byId[s.templateId];
-      if (t) groupCounts[t.group] = (groupCounts[t.group] || 0) + 1;
-    });
-    const maxCount = Math.max(1, ...Object.values(groupCounts));
-    el.bars.innerHTML = "";
-    GROUP_BASE.forEach((g) => {
-      const c = groupCounts[g] || 0;
-      const row = document.createElement("div");
-      row.className = "bar-row";
-      row.innerHTML =
-        '<span class="name">' + g + '</span>' +
-        '<span class="bar-track"><span class="bar-fill" style="width:' + (c / maxCount * 100) + '%"></span></span>' +
-        '<span class="count">' + c + '</span>';
-      el.bars.appendChild(row);
-    });
 
     el.history.innerHTML = "";
     if (sessions.length === 0) {

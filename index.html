@@ -930,7 +930,8 @@
   const ROTATION_LENGTH = ROTATION_ORDER.length;
 
   function abbreviateGroup(group) {
-    const words = group.split(/,|&/).map((w) => w.trim()).filter(Boolean);
+    const words = group.split(/,|&/).map((w) => w.trim()).filter(Boolean)
+      .filter((w) => w.toLowerCase() !== "mage");
     const chars = words.length <= 2 ? 4 : 3;
     return words.map((w) => w.slice(0, chars)).join("/");
   }

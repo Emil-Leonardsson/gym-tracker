@@ -1039,7 +1039,10 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
       img.style.setProperty("--rot", (Math.random() * 64 - 32).toFixed(1) + "deg");
       img.style.animationDelay = delay.toFixed(2) + "s";
       container.appendChild(img);
-      if (ctx) playStampThud(ctx, delay + 0.05, 550 + Math.random() * 500);
+      if (ctx) {
+        playStampThud(ctx, delay + 0.05, 550 + Math.random() * 500);
+        scheduleFanfare(ctx, delay, 0.25);
+      }
     }
     clearTimeout(burstTimer);
     burstTimer = setTimeout(() => { container.innerHTML = ""; }, 2500);

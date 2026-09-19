@@ -799,6 +799,39 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     } catch (e) {}
   }
 
+  let wakeLock = null;
+  let wakeLockPending = false;
+
+  async function acquireWakeLock() {
+    if (!("wakeLock" in navigator) || wakeLock || wakeLockPending) return;
+    wakeLockPending = true;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      lock.addEventListener("release", () => { if (wakeLock === lock) wakeLock = null; });
+      wakeLock = lock;
+      if (!activeSession) releaseWakeLock();
+    } catch (e) {
+      wakeLock = null;
+    }
+    wakeLockPending = false;
+  }
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    const lock = wakeLock;
+    wakeLock = null;
+    lock.release().catch(() => {});
+  }
+
+  function syncWakeLock() {
+    if (activeSession) acquireWakeLock();
+    else releaseWakeLock();
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncWakeLock();
+  });
+
   function withTimeout(promise, ms) {
     return Promise.race([
       promise,
@@ -1153,6 +1186,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     });
     const loading = mode === "loading";
     el.heroLoading.hidden = !loading;
+    syncWakeLock();
     const hasActive = !!activeSession;
     el.startBtn.hidden = hasActive;
     el.startBtn.disabled = loading || hasActive;

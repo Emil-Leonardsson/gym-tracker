@@ -240,6 +240,45 @@
 
   .hero .elapsed.paused { color: var(--muted); }
 
+  .stats-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .stats-tabs button {
+    flex: 1;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 10px;
+    padding: 8px 4px;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .stats-tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .stats-tabs button:focus-visible, .period-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #stats-overview[hidden], #stats-period[hidden] { display: none; }
+  .period-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .period-nav button {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .period-nav button:disabled { opacity: 0.35; cursor: default; }
+  .period-nav strong { font-size: 15px; text-align: center; }
+  .period-summary { color: var(--muted); font-size: 13px; text-align: center; margin: 0 0 16px; }
+  .bar-chart { display: flex; align-items: stretch; gap: 4px; height: 160px; }
+  .bar-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bar-col .val { height: 14px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--ink); }
+  .bar-col .bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  .bar-col .bar { width: 100%; max-width: 28px; background: var(--accent); border-radius: 5px 5px 2px 2px; }
+  .bar-col .bar.zero { background: var(--surface-2); height: 3px; }
+  .bar-col .lbl { height: 12px; font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--muted); white-space: nowrap; }
+
   .timer-bar {
     position: fixed;
     top: 0;
@@ -623,8 +662,25 @@
 
   <section class="stats">
     <h3>Statistik</h3>
-    <div class="stat-tiles" id="stat-tiles"></div>
-    <ul class="history" id="history"></ul>
+    <div class="stats-tabs" role="tablist" id="stats-tabs">
+      <button type="button" role="tab" data-tab="overview" aria-selected="true">Översikt</button>
+      <button type="button" role="tab" data-tab="week" aria-selected="false">Vecka</button>
+      <button type="button" role="tab" data-tab="month" aria-selected="false">Månad</button>
+      <button type="button" role="tab" data-tab="year" aria-selected="false">År</button>
+    </div>
+    <div id="stats-overview">
+      <div class="stat-tiles" id="stat-tiles"></div>
+      <ul class="history" id="history"></ul>
+    </div>
+    <div id="stats-period" hidden>
+      <div class="period-nav">
+        <button type="button" id="period-prev" aria-label="Föregående period">&#8249;</button>
+        <strong id="period-label"></strong>
+        <button type="button" id="period-next" aria-label="Nästa period">&#8250;</button>
+      </div>
+      <p class="period-summary" id="period-summary"></p>
+      <div class="bar-chart" id="bar-chart" role="img"></div>
+    </div>
   </section>
 
   <p class="status-line" id="status-line"></p>
@@ -761,6 +817,14 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     startBtn: document.getElementById("start-btn"),
     finishBtn: document.getElementById("finish-btn"),
     cancelBtn: document.getElementById("cancel-btn"),
+    statsTabs: document.getElementById("stats-tabs"),
+    statsOverview: document.getElementById("stats-overview"),
+    statsPeriod: document.getElementById("stats-period"),
+    periodPrev: document.getElementById("period-prev"),
+    periodNext: document.getElementById("period-next"),
+    periodLabel: document.getElementById("period-label"),
+    periodSummary: document.getElementById("period-summary"),
+    barChart: document.getElementById("bar-chart"),
     pauseBtn: document.getElementById("pause-btn"),
     timerBar: document.getElementById("timer-bar"),
     timerBarText: document.getElementById("timer-bar-text"),
@@ -1221,6 +1285,118 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
   let forcedLapStart = null;
 
+  let statsTab = "overview";
+  let statsOffset = 0;
+
+  function dayIndex(d) {
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  }
+
+  function computeStreaks(list) {
+    const days = [...new Set(list.map((s) => dayIndex(new Date(s.completedAt))))].sort((a, b) => a - b);
+    let best = 0;
+    let run = 0;
+    let prev = null;
+    days.forEach((d) => {
+      run = prev !== null && d === prev + 1 ? run + 1 : 1;
+      if (run > best) best = run;
+      prev = d;
+    });
+    let current = 0;
+    if (days.length && days[days.length - 1] >= dayIndex(new Date()) - 1) {
+      current = 1;
+      for (let i = days.length - 2; i >= 0 && days[i] === days[i + 1] - 1; i--) current++;
+    }
+    return { current, best };
+  }
+
+  function isoWeekNumber(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const firstThursday = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    return 1 + Math.round(((t - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  }
+
+  const SV_DAYS = ["Mån", "Tis", "Ons", "Tors", "Fre", "Lör", "Sön"];
+  const SV_MONTHS_SHORT = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+  function periodInfo(tab, offset) {
+    const now = new Date();
+    if (tab === "week") {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + offset * 7);
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+      const last = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1);
+      const range = start.getDate() + (start.getMonth() !== last.getMonth() ? " " + SV_MONTHS_SHORT[start.getMonth()] : "") +
+        "–" + last.getDate() + " " + SV_MONTHS_SHORT[last.getMonth()];
+      return {
+        start, end, count: 7,
+        label: "Vecka " + isoWeekNumber(start) + " · " + range,
+        bucket: (d) => (d.getDay() + 6) % 7,
+        axis: (i) => SV_DAYS[i],
+      };
+    }
+    if (tab === "month") {
+      const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+      const count = Math.round((end - start) / 86400000);
+      const name = start.toLocaleDateString("sv-SE", { month: "long", year: "numeric" });
+      return {
+        start, end, count,
+        label: name.charAt(0).toUpperCase() + name.slice(1),
+        bucket: (d) => d.getDate() - 1,
+        axis: (i) => (i === 0 || (i + 1) % 5 === 0 ? String(i + 1) : ""),
+      };
+    }
+    const year = now.getFullYear() + offset;
+    return {
+      start: new Date(year, 0, 1), end: new Date(year + 1, 0, 1), count: 12,
+      label: String(year),
+      bucket: (d) => d.getMonth(),
+      axis: (i) => SV_MONTHS_SHORT[i],
+    };
+  }
+
+  function renderPeriodStats() {
+    const p = periodInfo(statsTab, statsOffset);
+    const counts = new Array(p.count).fill(0);
+    let ms = 0;
+    let total = 0;
+    sessions.forEach((s) => {
+      const d = new Date(s.completedAt);
+      if (d < p.start || d >= p.end) return;
+      counts[p.bucket(d)]++;
+      total++;
+      ms += sessionDurationMs(s);
+    });
+    el.periodLabel.textContent = p.label;
+    el.periodNext.disabled = statsOffset >= 0;
+    el.periodSummary.textContent = total === 0
+      ? "Inga pass under perioden"
+      : total + " pass · " + formatHoursMinutes(ms) + " tränad tid";
+    el.barChart.setAttribute("aria-label", p.label + ": " + total + " pass");
+    const max = Math.max(1, ...counts);
+    el.barChart.innerHTML = "";
+    counts.forEach((c, i) => {
+      const col = document.createElement("div");
+      col.className = "bar-col";
+      col.title = p.axis(i) + ": " + c;
+      const val = document.createElement("span");
+      val.className = "val";
+      val.textContent = c > 0 ? String(c) : "";
+      const wrap = document.createElement("div");
+      wrap.className = "bar-wrap";
+      const bar = document.createElement("div");
+      bar.className = "bar" + (c === 0 ? " zero" : "");
+      if (c > 0) bar.style.height = (c / max) * 100 + "%";
+      wrap.appendChild(bar);
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      lbl.textContent = p.axis(i);
+      col.append(val, wrap, lbl);
+      el.barChart.appendChild(col);
+    });
+  }
+
   function fmtDate(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" }) +
@@ -1340,6 +1516,14 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     const last7d = sessions.filter((s) => now - new Date(s.completedAt).getTime() < 7 * 86400000).length;
     const lastDate = total ? fmtDate(sessions[0].completedAt) : "—";
     const totalTrainedMs = sessions.reduce((sum, s) => sum + sessionDurationMs(s), 0);
+    const streaks = computeStreaks(sessions);
+
+    el.statsTabs.querySelectorAll("button").forEach((b) => {
+      b.setAttribute("aria-selected", String(b.dataset.tab === statsTab));
+    });
+    el.statsOverview.hidden = statsTab !== "overview";
+    el.statsPeriod.hidden = statsTab === "overview";
+    if (statsTab !== "overview") renderPeriodStats();
 
     el.statTiles.innerHTML = "";
     [
@@ -1347,6 +1531,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
       { num: last7d, label: "Senaste 7 dagarna" },
       { num: lastDate, label: "Senast genomfört" },
       { num: formatHoursMinutes(totalTrainedMs), label: "Total tränad tid" },
+      { num: streaks.current + " d", label: "Nuvarande streak" },
+      { num: streaks.best + " d", label: "Bästa streak" },
     ].forEach((s) => {
       const tile = document.createElement("div");
       tile.className = "tile";
@@ -1443,6 +1629,15 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   el.startBtn.addEventListener("click", startSession);
   el.finishBtn.addEventListener("click", finishSession);
   el.pauseBtn.addEventListener("click", togglePause);
+  el.statsTabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    statsTab = b.dataset.tab;
+    statsOffset = 0;
+    render();
+  });
+  el.periodPrev.addEventListener("click", () => { statsOffset--; render(); });
+  el.periodNext.addEventListener("click", () => { if (statsOffset < 0) { statsOffset++; render(); } });
   el.timerBarPause.addEventListener("click", togglePause);
 
   if ("IntersectionObserver" in window) {

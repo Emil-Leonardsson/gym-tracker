@@ -234,6 +234,38 @@
 
   .action-row { display: flex; gap: 8px; }
   .action-row .primary { flex: 2; }
+  .action-row .secondary { padding: 14px 6px; font-size: 14px; }
+  .action-row #pause-btn { flex: 1.4; }
+  .action-row button[hidden] { display: none; }
+
+  .hero .elapsed.paused { color: var(--muted); }
+
+  .timer-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 20px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 4px 14px var(--shadow);
+  }
+  .timer-bar[hidden] { display: none; }
+  .timer-bar-text {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .timer-bar.paused .timer-bar-text { color: var(--muted); }
+  .timer-bar .secondary { flex: 0 0 auto; padding: 8px 14px; font-size: 13px; border-radius: 10px; }
   button.secondary {
     flex: 1;
     border: 1px solid var(--line);
@@ -557,6 +589,7 @@
     <div class="action-row">
       <button class="primary" id="start-btn" disabled>Starta</button>
       <button class="primary" id="finish-btn" disabled hidden>Avsluta</button>
+      <button class="secondary" id="pause-btn" hidden>Pausa</button>
       <button class="secondary" id="cancel-btn" disabled>Ångra</button>
     </div>
 
@@ -595,6 +628,11 @@
   </section>
 
   <p class="status-line" id="status-line"></p>
+</div>
+
+<div class="timer-bar" id="timer-bar" hidden>
+  <span class="timer-bar-text" id="timer-bar-text"></span>
+  <button type="button" class="secondary" id="timer-bar-pause">Pausa</button>
 </div>
 
 <div class="stamp-burst" id="stamp-burst" aria-hidden="true"></div>
@@ -723,6 +761,10 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     startBtn: document.getElementById("start-btn"),
     finishBtn: document.getElementById("finish-btn"),
     cancelBtn: document.getElementById("cancel-btn"),
+    pauseBtn: document.getElementById("pause-btn"),
+    timerBar: document.getElementById("timer-bar"),
+    timerBarText: document.getElementById("timer-bar-text"),
+    timerBarPause: document.getElementById("timer-bar-pause"),
     rotation: document.getElementById("rotation"),
     statTiles: document.getElementById("stat-tiles"),
     history: document.getElementById("history"),
@@ -763,13 +805,39 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     return h === 0 ? m + " min" : h + "h " + m + "m";
   }
 
+  function elapsedMs(a, now) {
+    const end = a.pausedAt ? new Date(a.pausedAt).getTime() : now;
+    return end - new Date(a.startedAt).getTime() - (a.pausedMs || 0);
+  }
+
+  function sessionDurationMs(s) {
+    if (!s.startedAt) return 0;
+    return Math.max(0, new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime() - (s.pausedMs || 0));
+  }
+
+  let elapsedVisible = true;
+
+  function updateTimerBar(text) {
+    const show = !!activeSession && !elapsedVisible;
+    el.timerBar.hidden = !show;
+    if (!show) return;
+    el.timerBarText.textContent = text;
+    el.timerBarPause.textContent = activeSession.pausedAt ? "Återuppta" : "Pausa";
+  }
+
   function updateElapsedDisplay() {
     if (!activeSession) {
       el.elapsed.hidden = true;
+      updateTimerBar("");
       return;
     }
+    const paused = !!activeSession.pausedAt;
+    const text = (paused ? "Pausad " : "Pågår ") + formatElapsed(elapsedMs(activeSession, Date.now()));
     el.elapsed.hidden = false;
-    el.elapsed.textContent = "Pågår: " + formatElapsed(Date.now() - new Date(activeSession.startedAt).getTime());
+    el.elapsed.classList.toggle("paused", paused);
+    el.elapsed.textContent = text;
+    el.timerBar.classList.toggle("paused", paused);
+    updateTimerBar(text);
   }
 
   function startElapsedTimer() {
@@ -824,7 +892,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   }
 
   function syncWakeLock() {
-    if (activeSession) acquireWakeLock();
+    if (activeSession && !activeSession.pausedAt) acquireWakeLock();
     else releaseWakeLock();
   }
 
@@ -852,27 +920,48 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     }
   }
 
-  async function startSession() {
-    if (activeSession) return;
-    setBusy(el.startBtn, "Startar…");
-    activeSession = { templateId: nextTemplateId(), startedAt: new Date().toISOString() };
-    if (mode === "db" && authUser) {
+  async function persistActive() {
+    if (mode === "db" && authUser && activeSession) {
       try {
         const { error } = await withTimeout(db.from("active_session").upsert({
           user_id: authUser.id,
           template_id: activeSession.templateId,
           started_at: activeSession.startedAt,
+          paused_at: activeSession.pausedAt || null,
+          paused_ms: activeSession.pausedMs || 0,
         }), 10000);
         if (error) throw error;
-      } catch (e) {
-        saveActiveLocal();
-      }
-    } else {
-      saveActiveLocal();
+        return;
+      } catch (e) {}
     }
+    saveActiveLocal();
+  }
+
+  async function startSession() {
+    if (activeSession) return;
+    setBusy(el.startBtn, "Startar…");
+    activeSession = { templateId: nextTemplateId(), startedAt: new Date().toISOString(), pausedAt: null, pausedMs: 0 };
+    await persistActive();
     clearBusy(el.startBtn);
     startElapsedTimer();
     render();
+  }
+
+  let pauseBusy = false;
+
+  async function togglePause() {
+    if (!activeSession || pauseBusy) return;
+    pauseBusy = true;
+    const nowMs = Date.now();
+    if (activeSession.pausedAt) {
+      activeSession.pausedMs = (activeSession.pausedMs || 0) + (nowMs - new Date(activeSession.pausedAt).getTime());
+      activeSession.pausedAt = null;
+    } else {
+      activeSession.pausedAt = new Date(nowMs).toISOString();
+    }
+    render();
+    await persistActive();
+    pauseBusy = false;
   }
 
   async function cancelActive() {
@@ -893,8 +982,10 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   async function finishSession() {
     if (!activeSession) return;
     setBusy(el.finishBtn, "Sparar…");
-    const { templateId, startedAt } = activeSession;
+    const { templateId, startedAt, pausedAt } = activeSession;
     const completedAt = new Date().toISOString();
+    let pausedMs = activeSession.pausedMs || 0;
+    if (pausedAt) pausedMs += new Date(completedAt).getTime() - new Date(pausedAt).getTime();
     activeSession = null;
     stopElapsedTimer();
     saveActiveLocal();
@@ -919,6 +1010,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
           template_id: templateId,
           started_at: startedAt,
           completed_at: completedAt,
+          paused_ms: pausedMs,
         }), 10000);
         if (error) throw error;
         try {
@@ -929,12 +1021,12 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
         render();
       } catch (e) {
         clearBusy(el.finishBtn);
-        sessions.unshift({ id: genLocalId(), templateId, startedAt, completedAt });
+        sessions.unshift({ id: genLocalId(), templateId, startedAt, completedAt, pausedMs });
         render();
       }
     } else {
       clearBusy(el.finishBtn);
-      sessions.unshift({ id: genLocalId(), templateId, startedAt, completedAt });
+      sessions.unshift({ id: genLocalId(), templateId, startedAt, completedAt, pausedMs });
       saveLocal();
       render();
     }
@@ -1140,7 +1232,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     const heroTemplateId = activeSession ? activeSession.templateId : nextId;
     const next = byId[heroTemplateId];
 
-    el.heroEyebrow.textContent = activeSession ? "Pågående pass" : "Nästa pass";
+    el.heroEyebrow.textContent = activeSession ? (activeSession.pausedAt ? "Pausat pass" : "Pågående pass") : "Nästa pass";
     el.heroTitle.textContent = next.group;
     el.heroVariant.textContent = "Variant " + next.variant;
     updateElapsedDisplay();
@@ -1192,6 +1284,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     el.startBtn.disabled = loading || hasActive;
     el.finishBtn.hidden = !hasActive;
     el.finishBtn.disabled = loading || !hasActive;
+    el.pauseBtn.hidden = !hasActive;
+    el.pauseBtn.textContent = hasActive && activeSession.pausedAt ? "Återuppta" : "Pausa";
     el.cancelBtn.disabled = loading || (!hasActive && sessions.length === 0);
     el.cancelBtn.textContent = hasActive ? "Ångra" : "Ångra senaste";
 
@@ -1245,9 +1339,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     const now = Date.now();
     const last7d = sessions.filter((s) => now - new Date(s.completedAt).getTime() < 7 * 86400000).length;
     const lastDate = total ? fmtDate(sessions[0].completedAt) : "—";
-    const totalTrainedMs = sessions.reduce((sum, s) => {
-      return s.startedAt ? sum + (new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime()) : sum;
-    }, 0);
+    const totalTrainedMs = sessions.reduce((sum, s) => sum + sessionDurationMs(s), 0);
 
     el.statTiles.innerHTML = "";
     [
@@ -1276,7 +1368,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
         const li = document.createElement("li");
         const name = document.createElement("span");
         const durationText = s.startedAt
-          ? " · " + formatElapsed(new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime())
+          ? " · " + formatElapsed(sessionDurationMs(s))
           : "";
         name.textContent = (t ? t.group + " (" + t.variant + ")" : s.templateId) + durationText;
         const date = document.createElement("span");
@@ -1312,16 +1404,23 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   }
 
   async function loadSessions() {
-    const { data, error } = await withTimeout(
-      db.from("sessions").select("*").order("completed_at", { ascending: false }).limit(200),
-      10000
-    );
-    if (error) throw error;
-    sessions = (data || []).map((r) => ({
+    const PAGE = 1000;
+    const rows = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await withTimeout(
+        db.from("sessions").select("*").order("completed_at", { ascending: false }).range(from, from + PAGE - 1),
+        10000
+      );
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    sessions = rows.map((r) => ({
       id: r.id,
       templateId: r.template_id,
       startedAt: r.started_at,
       completedAt: r.completed_at,
+      pausedMs: Number(r.paused_ms) || 0,
     }));
   }
 
@@ -1331,11 +1430,30 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
       10000
     );
     if (error) throw error;
-    activeSession = data && data.started_at ? { templateId: data.template_id, startedAt: data.started_at } : null;
+    activeSession = data && data.started_at
+      ? {
+          templateId: data.template_id,
+          startedAt: data.started_at,
+          pausedAt: data.paused_at || null,
+          pausedMs: Number(data.paused_ms) || 0,
+        }
+      : null;
   }
 
   el.startBtn.addEventListener("click", startSession);
   el.finishBtn.addEventListener("click", finishSession);
+  el.pauseBtn.addEventListener("click", togglePause);
+  el.timerBarPause.addEventListener("click", togglePause);
+
+  if ("IntersectionObserver" in window) {
+    elapsedVisible = true;
+    new IntersectionObserver((entries) => {
+      elapsedVisible = entries[entries.length - 1].isIntersecting;
+      updateElapsedDisplay();
+    }).observe(el.elapsed);
+  } else {
+    elapsedVisible = false;
+  }
   el.cancelBtn.addEventListener("click", handleCancelClick);
   el.undoCancelBtn.addEventListener("click", closeUndoPanel);
   el.undoConfirmBtn.addEventListener("click", confirmUndo);

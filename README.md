@@ -8,8 +8,14 @@ pass.
 
 **Använd appen här:** https://emil-leonardsson.github.io/gym-tracker/
 
-Kräver inloggning (magic link via e-post) – ingen träningsdata visas eller
-går att nå förrän du är inloggad.
+Går att prova direkt som gäst (allt sparas då bara lokalt i webbläsaren).
+Logga in med magic link via e-post för att synka loggen i molnet mellan
+enheter.
+
+**Funktioner:** Starta/Pausa/Avsluta/Ångra med passlängd (pausad tid räknas
+inte), timer som följer med vid scroll, bläddra mellan pass (Starta startar
+alltid nästa pass i rotationen), statistik per vecka/månad/år, samt streak
+(nuvarande och bästa, i dagar i rad).
 
 Detta repo är källkoden (`index.html`), en helt statisk sida utan
 byggsteg, hostad direkt via GitHub Pages. Den pratar med en Supabase-databas

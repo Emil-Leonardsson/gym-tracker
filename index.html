@@ -240,6 +240,36 @@
 
   .hero .elapsed.paused { color: var(--muted); }
 
+  .hero-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+  .hero-nav .eyebrow { margin: 0; flex: 1; }
+  .hero-nav[data-locked="true"] .nav-btn { display: none; }
+  .nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .preview-note { margin: -8px 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .preview-note[hidden] { display: none; }
+  .preview-note button {
+    border: none;
+    background: none;
+    padding: 0;
+    margin-left: 6px;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   .stats-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
   .stats-tabs button {
     flex: 1;
@@ -619,9 +649,17 @@
   </header>
 
   <div class="card hero" id="hero">
-    <p class="eyebrow" id="hero-eyebrow">Nästa pass</p>
+    <div class="hero-nav">
+      <button type="button" class="nav-btn" id="hero-prev" aria-label="Föregående pass">&#8249;</button>
+      <p class="eyebrow" id="hero-eyebrow">Nästa pass</p>
+      <button type="button" class="nav-btn" id="hero-next" aria-label="Nästa pass i listan">&#8250;</button>
+    </div>
     <h2 id="hero-title">Laddar…</h2>
     <span class="variant-tag" id="hero-variant"></span>
+    <p class="preview-note" id="preview-note" hidden>
+      <span id="preview-note-text"></span>
+      <button type="button" id="preview-back">Tillbaka till nästa pass</button>
+    </p>
     <p class="elapsed" id="elapsed" hidden></p>
     <ul class="exercise-list" id="hero-exercises"></ul>
 
@@ -809,6 +847,12 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     authSubmitBtn: document.getElementById("auth-submit-btn"),
     authStatus: document.getElementById("auth-status"),
     heroEyebrow: document.getElementById("hero-eyebrow"),
+    heroNav: document.querySelector(".hero-nav"),
+    heroPrev: document.getElementById("hero-prev"),
+    heroNext: document.getElementById("hero-next"),
+    previewNote: document.getElementById("preview-note"),
+    previewNoteText: document.getElementById("preview-note-text"),
+    previewBack: document.getElementById("preview-back"),
     heroTitle: document.getElementById("hero-title"),
     heroVariant: document.getElementById("hero-variant"),
     elapsed: document.getElementById("elapsed"),
@@ -1004,6 +1048,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
   async function startSession() {
     if (activeSession) return;
     setBusy(el.startBtn, "Startar…");
+    viewOffset = 0;
     activeSession = { templateId: nextTemplateId(), startedAt: new Date().toISOString(), pausedAt: null, pausedMs: 0 };
     await persistActive();
     clearBusy(el.startBtn);
@@ -1055,6 +1100,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     saveActiveLocal();
     showUndoPanel = false;
     forcedLapStart = null;
+    viewOffset = 0;
 
     const willCompleteLap = (sessions.length + 1) % ROTATION_WINDOW_SIZE === 0;
     if (willCompleteLap) {
@@ -1118,6 +1164,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     if (undoBusy || sessions.length === 0) return;
     const target = sessions[0];
     forcedLapStart = null;
+    viewOffset = 0;
     undoBusy = true;
     setBusy(el.undoConfirmBtn, "Ångrar…");
     try {
@@ -1287,6 +1334,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
   let statsTab = "overview";
   let statsOffset = 0;
+  let viewOffset = 0;
 
   function dayIndex(d) {
     return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
@@ -1405,10 +1453,21 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
   function render() {
     const nextId = nextTemplateId();
-    const heroTemplateId = activeSession ? activeSession.templateId : nextId;
+    const previewing = !activeSession && viewOffset !== 0;
+    const heroTemplateId = activeSession
+      ? activeSession.templateId
+      : templateAtIndex(sessions.length + viewOffset);
     const next = byId[heroTemplateId];
 
-    el.heroEyebrow.textContent = activeSession ? (activeSession.pausedAt ? "Pausat pass" : "Pågående pass") : "Nästa pass";
+    el.heroEyebrow.textContent = activeSession
+      ? (activeSession.pausedAt ? "Pausat pass" : "Pågående pass")
+      : previewing ? "Förhandsvisning" : "Nästa pass";
+    el.heroNav.dataset.locked = String(!!activeSession);
+    el.previewNote.hidden = !previewing;
+    if (previewing) {
+      const n = byId[nextId];
+      el.previewNoteText.textContent = "Starta startar nästa pass: " + n.group + " (" + n.variant + ").";
+    }
     el.heroTitle.textContent = next.group;
     el.heroVariant.textContent = "Variant " + next.variant;
     updateElapsedDisplay();
@@ -1636,6 +1695,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
     statsOffset = 0;
     render();
   });
+  el.heroPrev.addEventListener("click", () => { viewOffset = (viewOffset + ROTATION_LENGTH - 1) % ROTATION_LENGTH; render(); });
+  el.heroNext.addEventListener("click", () => { viewOffset = (viewOffset + 1) % ROTATION_LENGTH; render(); });
+  el.previewBack.addEventListener("click", () => { viewOffset = 0; render(); });
   el.periodPrev.addEventListener("click", () => { statsOffset--; render(); });
   el.periodNext.addEventListener("click", () => { if (statsOffset < 0) { statsOffset++; render(); } });
   el.timerBarPause.addEventListener("click", togglePause);
